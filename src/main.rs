@@ -160,90 +160,94 @@ fn stress_cpu(percent: u64, duration: Duration) {
     }
 }
 
+#[cfg(target_os = "windows")]
+#[allow(non_snake_case, dead_code)]
+#[repr(C)]
+struct MEMORYSTATUSEX {
+    dwLength: u32,
+    dwMemoryLoad: u32,
+    ullTotalPhys: u64,
+    ullAvailPhys: u64,
+    ullTotalPageFile: u64,
+    ullAvailPageFile: u64,
+    ullTotalVirtual: u64,
+    ullAvailVirtual: u64,
+    ullAvailExtendedVirtual: u64,
+}
+
+#[cfg(target_os = "windows")]
+#[allow(dead_code)]
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GlobalMemoryStatusEx(lpBuffer: *mut MEMORYSTATUSEX) -> i32;
+}
+
+#[allow(dead_code)]
 fn read_total_memory_kb() -> u64 {
-    #[cfg(target_os = "windows")]
-    #[allow(non_snake_case)]
-    #[repr(C)]
-    struct MEMORYSTATUSEX {
-        dwLength: u32,
-        dwMemoryLoad: u32,
-        ullTotalPhys: u64,
-        ullAvailPhys: u64,
-        ullTotalPageFile: u64,
-        ullAvailPageFile: u64,
-        ullTotalVirtual: u64,
-        ullAvailVirtual: u64,
-        ullAvailExtendedVirtual: u64,
-    }
-
-    #[cfg(target_os = "windows")]
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn GlobalMemoryStatusEx(lpBuffer: *mut MEMORYSTATUSEX) -> i32;
-    }
-
-    fn read_total_memory_kb() -> u64 {
-        #[cfg(target_os = "linux")]
-        {
-            if let Ok(contents) = std::fs::read_to_string("/proc/meminfo") {
-                for line in contents.lines() {
-                    if line.starts_with("MemTotal:") {
-                        if let Some(kb_str) = line.split_whitespace().nth(1) {
-                            if let Ok(kb) = kb_str.parse::<u64>() {
-                                return kb;
-                            }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(contents) = std::fs::read_to_string("/proc/meminfo") {
+            for line in contents.lines() {
+                if line.starts_with("MemTotal:") {
+                    if let Some(kb_str) = line.split_whitespace().nth(1) {
+                        if let Ok(kb) = kb_str.parse::<u64>() {
+                            return kb;
                         }
                     }
                 }
             }
         }
+        eprintln!("Failed to read /proc/meminfo");
+    }
 
-        #[cfg(target_os = "macos")]
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        if let Ok(output) = Command::new("sysctl")
+            .arg("-n")
+            .arg("hw.memsize")
+            .output()
         {
-            use std::process::Command;
-
-            if let Ok(output) = Command::new("sysctl")
-                .arg("hw.memsize")
-                .output()
-            {
-                if output.status.success() {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    if let Some(mem_bytes) = stdout.split_whitespace().last() {
-                        if let Ok(bytes) = mem_bytes.parse::<u64>() {
-                            return bytes / 1024; // Convert to KB
-                        }
+            if output.status.success() {
+                if let Ok(value) = String::from_utf8(output.stdout) {
+                    if let Ok(bytes) = value.trim().parse::<u64>() {
+                        return bytes / 1024; // Convert to KB
+                    } else {
+                        eprintln!("Failed to parse memory size as integer: '{}'", value.trim());
                     }
-                }
-            }
-        }
-
-        #[cfg(target_os = "windows")]
-
-        {
-            use std::mem::MaybeUninit;
-
-            unsafe {
-                let mut mem_info = MaybeUninit::<MEMORYSTATUSEX>::zeroed();
-                (*mem_info.as_mut_ptr()).dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
-
-                if GlobalMemoryStatusEx(mem_info.as_mut_ptr()) != 0 {
-                    let mem_info = mem_info.assume_init();
-                    return mem_info.ullTotalPhys / 1024; // Convert bytes to KB
                 } else {
-                    eprintln!("GlobalMemoryStatusEx failed.");
+                    eprintln!("Non-UTF8 output from sysctl hw.memsize");
                 }
+            } else {
+                eprintln!("sysctl call failed with status: {:?}", output.status);
             }
+        } else {
+            eprintln!("Failed to run sysctl command");
         }
-
-        println!("Unable to detect total memory, using fallback 1GB");
-        1024 * 1024 // Fallback: 1 GB in KB
     }
 
+    #[cfg(target_os = "windows")]
+    {
+        use std::mem::MaybeUninit;
 
+        unsafe {
+            let mut mem_info = MaybeUninit::<MEMORYSTATUSEX>::zeroed();
+            (*mem_info.as_mut_ptr()).dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+
+            if GlobalMemoryStatusEx(mem_info.as_mut_ptr()) != 0 {
+                let mem_info = mem_info.assume_init();
+                return mem_info.ullTotalPhys / 1024; // Convert to KB
+            } else {
+                eprintln!("GlobalMemoryStatusEx failed.");
+            }
+        }
+    }
 
     println!("Unable to detect total memory, using fallback 1GB");
-    1024 * 1024
+    1024 * 1024 // Fallback: 1 GB in KB
 }
+
 
 fn stress_memory(percent: u64, duration: Duration) {
     let total_kb = read_total_memory_kb();
