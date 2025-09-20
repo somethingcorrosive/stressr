@@ -1,0 +1,6 @@
+[package]
+name = "stressr"
+version = "0.1.0"
+authors = ["somethingcorrosive"]
+edition = "2024"
+description = "A zero-dependency Rust system stress tool"
