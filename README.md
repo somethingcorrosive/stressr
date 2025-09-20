@@ -39,6 +39,35 @@ cargo build --release
   --chunk-size 64
 ```
 
+
+### Help Output
+
+```bash
+stessr - A zero-dependency Rust stress testing tool
+
+Usage:
+  rstress [OPTIONS]
+
+General Options:
+  --cpu-percent <N>       CPU load per thread (0–100)
+  --memory-percent <N>    Percent of total RAM to allocate
+  --duration <SECS>       Duration for CPU and memory stress (seconds)
+
+Disk I/O Options:
+  --io                    Enable disk I/O stress
+  --io-paths <DIR1,...>   Comma-separated list of target directories
+  --io-workers <N>        Number of threads per path
+  --io-size <MB>          Size in MB to allocate per worker
+  --io-duration <SECS>    Duration of I/O stress test
+  --io-read               Enable disk reads
+  --io-write              Enable disk writes
+  --io-random             Enable random (seek-based) access
+  --chunk-size <KB>       Chunk size per read/write operation
+
+Help:
+  -h, --help              Show this help message
+```
+
 ### CLI Flags
 
 | Flag                     | Description                                      |
