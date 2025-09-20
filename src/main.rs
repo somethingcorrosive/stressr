@@ -161,73 +161,84 @@ fn stress_cpu(percent: u64, duration: Duration) {
 }
 
 fn read_total_memory_kb() -> u64 {
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(contents) = std::fs::read_to_string("/proc/meminfo") {
-            for line in contents.lines() {
-                if line.starts_with("MemTotal:") {
-                    if let Some(kb_str) = line.split_whitespace().nth(1) {
-                        if let Ok(kb) = kb_str.parse::<u64>() {
-                            return kb;
+    #[cfg(target_os = "windows")]
+    #[allow(non_snake_case)]
+    #[repr(C)]
+    struct MEMORYSTATUSEX {
+        dwLength: u32,
+        dwMemoryLoad: u32,
+        ullTotalPhys: u64,
+        ullAvailPhys: u64,
+        ullTotalPageFile: u64,
+        ullAvailPageFile: u64,
+        ullTotalVirtual: u64,
+        ullAvailVirtual: u64,
+        ullAvailExtendedVirtual: u64,
+    }
+
+    #[cfg(target_os = "windows")]
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GlobalMemoryStatusEx(lpBuffer: *mut MEMORYSTATUSEX) -> i32;
+    }
+
+    fn read_total_memory_kb() -> u64 {
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(contents) = std::fs::read_to_string("/proc/meminfo") {
+                for line in contents.lines() {
+                    if line.starts_with("MemTotal:") {
+                        if let Some(kb_str) = line.split_whitespace().nth(1) {
+                            if let Ok(kb) = kb_str.parse::<u64>() {
+                                return kb;
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
-    #[cfg(target_os = "macos")]
-    {
-        use std::process::Command;
-
-        if let Ok(output) = Command::new("sysctl")
-            .arg("hw.memsize")
-            .output()
+        #[cfg(target_os = "macos")]
         {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                if let Some(mem_bytes) = stdout.split_whitespace().last() {
-                    if let Ok(bytes) = mem_bytes.parse::<u64>() {
-                        return bytes / 1024;
+            use std::process::Command;
+
+            if let Ok(output) = Command::new("sysctl")
+                .arg("hw.memsize")
+                .output()
+            {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    if let Some(mem_bytes) = stdout.split_whitespace().last() {
+                        if let Ok(bytes) = mem_bytes.parse::<u64>() {
+                            return bytes / 1024; // Convert to KB
+                        }
                     }
                 }
             }
         }
-    }
 
+        #[cfg(target_os = "windows")]
 
-    #[cfg(target_os = "windows")]
-    {
-        use std::mem::MaybeUninit;
+        {
+            use std::mem::MaybeUninit;
 
-        #[repr(C)]
-        struct MEMORYSTATUSEX {
-            dwLength: u32,
-            dwMemoryLoad: u32,
-            ullTotalPhys: u64,
-            ullAvailPhys: u64,
-            ullTotalPageFile: u64,
-            ullAvailPageFile: u64,
-            ullTotalVirtual: u64,
-            ullAvailVirtual: u64,
-            ullAvailExtendedVirtual: u64,
-        }
+            unsafe {
+                let mut mem_info = MaybeUninit::<MEMORYSTATUSEX>::zeroed();
+                (*mem_info.as_mut_ptr()).dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
 
-        extern "system" {
-            fn GlobalMemoryStatusEx(lpBuffer: *mut MEMORYSTATUSEX) -> i32;
-        }
-
-        unsafe {
-            let mut mem_info = MaybeUninit::<MEMORYSTATUSEX>::zeroed();
-            (*mem_info.as_mut_ptr()).dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
-
-            let result = GlobalMemoryStatusEx(mem_info.as_mut_ptr());
-            if result != 0 {
-                let mem_info = mem_info.assume_init();
-                return mem_info.ullTotalPhys / 1024; // Return in KB
+                if GlobalMemoryStatusEx(mem_info.as_mut_ptr()) != 0 {
+                    let mem_info = mem_info.assume_init();
+                    return mem_info.ullTotalPhys / 1024; // Convert bytes to KB
+                } else {
+                    eprintln!("GlobalMemoryStatusEx failed.");
+                }
             }
         }
+
+        println!("Unable to detect total memory, using fallback 1GB");
+        1024 * 1024 // Fallback: 1 GB in KB
     }
+
 
 
     println!("Unable to detect total memory, using fallback 1GB");
