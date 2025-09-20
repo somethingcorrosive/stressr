@@ -220,7 +220,7 @@ fn read_total_memory_kb() -> u64 {
             let mut mem_info = MaybeUninit::<MEMORYSTATUSEX>::zeroed();
             (*mem_info.as_mut_ptr()).dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
 
-            if GlobalMemoryStatusEx(mem_info.as_mut_ptr()) != 0 {
+            if unsafe { GlobalMemoryStatusEx(mem_info.as_mut_ptr()) } != 0 {
                 let mem_info = mem_info.assume_init();
                 return mem_info.ullTotalPhys / 1024;
             }
