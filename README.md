@@ -24,7 +24,7 @@ cargo build --release
 ```
 
 ```bash
-./target/release/rstress \
+./target/release/stressr \
   --cpu-percent 60 \
   --memory-percent 40 \
   --duration 30 \
