@@ -195,6 +195,7 @@ fn read_total_memory_kb() -> u64 {
         }
     }
 
+
     #[cfg(target_os = "windows")]
     {
         use std::mem::MaybeUninit;
@@ -220,12 +221,14 @@ fn read_total_memory_kb() -> u64 {
             let mut mem_info = MaybeUninit::<MEMORYSTATUSEX>::zeroed();
             (*mem_info.as_mut_ptr()).dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
 
-            if unsafe { GlobalMemoryStatusEx(mem_info.as_mut_ptr()) } != 0 {
+            let result = GlobalMemoryStatusEx(mem_info.as_mut_ptr());
+            if result != 0 {
                 let mem_info = mem_info.assume_init();
-                return mem_info.ullTotalPhys / 1024;
+                return mem_info.ullTotalPhys / 1024; // Return in KB
             }
         }
     }
+
 
     println!("Unable to detect total memory, using fallback 1GB");
     1024 * 1024
