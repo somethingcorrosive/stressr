@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 fn print_help() {
     println!(
-        r#"stessr - A zero-dependency Rust stress testing tool
+        r#"stressr - A zero-dependency Rust stress testing tool
 
 Usage:
   stressr [OPTIONS]
