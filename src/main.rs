@@ -10,7 +10,7 @@ fn print_help() {
         r#"stessr - A zero-dependency Rust stress testing tool
 
 Usage:
-  rstress [OPTIONS]
+  stressr [OPTIONS]
 
 General Options:
   --cpu-percent <N>       CPU load per thread (0–100)
